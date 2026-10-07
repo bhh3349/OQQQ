@@ -13,6 +13,7 @@ export class SummaryManager {
   private counters = new Map<string, number>();
   constructor(private bus: MessageBus, private threshold = 30) {}
 
+  get every(): number { return this.threshold; }
   setThreshold(n: number) { this.threshold = n; }
 
   /** call for every effective message; returns true when a summary is due */
