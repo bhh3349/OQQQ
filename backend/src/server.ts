@@ -80,6 +80,17 @@ async function engineList(): Promise<Engine[]> {
 const app = Fastify({ logger: false });
 await app.register(websocket);
 
+// CORS: 前端 dev server / 打包页面跨域调 API
+app.addHook('onRequest', async (req, reply) => {
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    reply.code(204).send();
+    return;
+  }
+});
+
 function toClient(m: Message) {
   return JSON.stringify({ type: "message", message: m });
 }
