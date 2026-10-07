@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { OpenAIAdapter } from "../adapters/openai.js";
 import type { AgentAdapter } from "../adapters/types.js";
-import type { Member, Session } from "../types.js";
+import type { Member, Message, Session } from "../types.js";
 import { SessionManager } from "../session/index.js";
 
 export interface AgentSpec {
@@ -53,6 +54,37 @@ export class PmAgent {
 
   confirmSpec() { this.phase = "spec_ready"; }
   getSpec(): AgentSpec[] { return this.spec; }
+
+  /**
+   * Ask the LLM to propose a team spec (JSON) from the interview history.
+   * Called after the user confirms the requirement doc.
+   */
+  async proposeTeam(history: Message[], workspace: string): Promise<AgentSpec[]> {
+    const adapter = [...this.adapters.values()].find((a) => a instanceof OpenAIAdapter);
+    if (!adapter || !(adapter instanceof OpenAIAdapter)) {
+      throw new Error("proposeTeam needs an OpenAI-compatible adapter");
+    }
+    const prompt = [
+      "根据以上需求访谈记录，输出组建开发团队所需的 Agent 规格清单。",
+      "只输出 JSON 数组，不要其他文字。每个元素字段：",
+      '{"name":"名字","avatar":"emoji","role":"职责一句话","systemPrompt":"完整 system prompt","engine":"openai","skills":[],"connectors":[]}',
+      "engine 固定填 openai。Agent 数量 2-5 个，覆盖需求所需角色（如前端、后端、测试）。",
+    ].join("\n");
+    const hist: Message[] = [...history, {
+      id: randomUUID(), sessionId: "", kind: "text" as const,
+      from: "bo", ts: Date.now(), payload: { text: prompt, mentions: [] },
+    }];
+    let raw = "";
+    for await (const c of adapter.chat(hist, workspace, { systemPrompt: "You output only JSON." })) {
+      raw += c.delta;
+    }
+    const start = raw.indexOf("[");
+    const end = raw.lastIndexOf("]");
+    if (start < 0 || end < 0) throw new Error("LLM did not return a JSON array");
+    const spec = JSON.parse(raw.slice(start, end + 1)) as AgentSpec[];
+    this.spec = spec;
+    return spec;
+  }
 
   /** default interview system prompt; refined per project */
   static interviewPrompt(): string {

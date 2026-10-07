@@ -15,6 +15,8 @@ export interface Member {
   kind: "user" | "agent";
   /** engine behind an agent member, e.g. "hermes" | "claude-code" | "codex" | "dsh" */
   engine?: string;
+  /** per-agent system prompt (PM interview prompt, coder role prompt, …) */
+  systemPrompt?: string;
   online: boolean;
 }
 

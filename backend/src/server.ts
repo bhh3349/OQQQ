@@ -5,6 +5,8 @@ import { MessageBus } from "./bus/index.js";
 import { SessionManager } from "./session/index.js";
 import { route } from "./router/index.js";
 import { SummaryManager } from "./summary/index.js";
+import { ArchiveManager } from "./archive/index.js";
+import { PmAgent } from "./pm/index.js";
 import { EchoAdapter } from "./adapters/echo.js";
 import { DshAdapter } from "./adapters/dsh.js";
 import { ClaudeCodeAdapter, CodexAdapter } from "./adapters/cli.js";
@@ -33,9 +35,15 @@ if (process.env.OQQQ_API_KEY) {
 
 /** seed a demo project group: owner Bo + PM (admin) */
 const bo: Member = { id: "bo", name: "Bo", avatar: "🧑", role: "owner", kind: "user", online: true };
-const pm: Member = { id: "pm", name: "PM", avatar: "📋", role: "admin", kind: "agent", engine: "echo", online: true };
+const pmEngine = process.env.OQQQ_API_KEY ? "openai" : "echo";
+const pm: Member = {
+  id: "pm", name: "PM", avatar: "📋", role: "admin", kind: "agent",
+  engine: pmEngine, online: true, systemPrompt: PmAgent.interviewPrompt(),
+};
 const demo = sessions.create({ kind: "group", name: "OQQQ 开发群", workspace: "/tmp/oqqq-demo", owner: bo });
 sessions.addMember(demo.id, pm, "admin");
+const pmAgent = new PmAgent(sessions, adapters, pm);
+const archive = new ArchiveManager();
 
 /** engine registry for 联系人 -> 添加 agent */
 const engines: Engine[] = [
@@ -93,7 +101,7 @@ app.get("/ws", { websocket: true }, (socket, req) => {
           }
           const replyId = randomUUID();
           let full = "";
-          for await (const chunk of adapter.chat(bus.recent(sessionId, 20), s.workspace)) {
+          for await (const chunk of adapter.chat(bus.recent(sessionId, 20), s.workspace, { systemPrompt: target.systemPrompt })) {
             if (chunk.done) break;
             full += chunk.delta;
             socket.send(JSON.stringify({ type: "delta", id: replyId, delta: chunk.delta }));
@@ -132,6 +140,38 @@ app.get("/api/connectors", async () => [
   { id: "gmail", name: "Gmail", desc: "搜索 / 读邮件，只读", connected: true },
   { id: "pg", name: "PostgreSQL", desc: "查询业务数据库", connected: false },
 ]);
+
+/** PM workflow API */
+app.get("/api/sessions/:id/pm", async () => ({ phase: pmAgent.phase, spec: pmAgent.getSpec() }));
+app.post("/api/sessions/:id/pm/confirm", async () => { pmAgent.confirmSpec(); return { ok: true, phase: pmAgent.phase }; });
+app.post("/api/sessions/:id/pm/propose-team", async (req) => {
+  const { id } = req.params as Record<string, string>;
+  const s = sessions.get(id);
+  if (!s) return { ok: false, error: "no session" };
+  try {
+    const spec = await pmAgent.proposeTeam(bus.recent(id, 40), s.workspace);
+    return { ok: true, spec };
+  } catch (err) { return { ok: false, error: String(err).slice(0, 300) }; }
+});
+app.post("/api/sessions/:id/pm/form-team", async (req) => {
+  const { id } = req.params as Record<string, string>;
+  const s = sessions.get(id);
+  if (!s) return { ok: false, error: "no session" };
+  try {
+    const created = pmAgent.formTeam(s, pmAgent.getSpec());
+    const spec = pmAgent.getSpec();
+    created.forEach((m, i) => { m.systemPrompt = spec[i]?.systemPrompt; });
+    return { ok: true, members: created.map((m) => m.id) };
+  } catch (err) { return { ok: false, error: String(err).slice(0, 300) }; }
+});
+app.post("/api/sessions/:id/archive", async (req) => {
+  const { id } = req.params as Record<string, string>;
+  const s = sessions.get(id);
+  if (!s) return { ok: false, error: "no session" };
+  const recent = bus.recent(id, 200);
+  const summaries = recent.filter((m) => m.kind === "summary");
+  return { ok: true, archive: archive.build(s, summaries, recent.slice(-20), [], { done: [], todo: [] }) };
+});
 
 const port = Number(process.env.PORT ?? 18791);
 await app.listen({ port, host: "127.0.0.1" });

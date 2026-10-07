@@ -6,6 +6,11 @@ export interface ChatChunk {
   done: boolean;
 }
 
+export interface ChatOpts {
+  /** per-agent system prompt; overrides the adapter default */
+  systemPrompt?: string;
+}
+
 export interface AdapterInfo {
   engine: string;
   version: string;
@@ -28,7 +33,7 @@ export interface AgentAdapter {
    * assistant Message. History is the recent session messages
    * (summaries + last N), already trimmed by the caller.
    */
-  chat(history: Message[], workspace: string): AsyncGenerator<ChatChunk>;
+  chat(history: Message[], workspace: string, opts?: ChatOpts): AsyncGenerator<ChatChunk>;
 
   /** install / update / uninstall the engine (联系人 -> 添加 agent) */
   install(): Promise<void>;

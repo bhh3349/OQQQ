@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Message, ToolCallPayload } from "../types.js";
-import type { AgentAdapter, ChatChunk } from "./types.js";
+import type { AgentAdapter, ChatChunk, ChatOpts } from "./types.js";
 
 export interface OpenAIOpts {
   baseURL: string;
@@ -98,10 +98,10 @@ export class OpenAIAdapter implements AgentAdapter {
     return `unknown tool: ${name}`;
   }
 
-  private toMessages(history: Message[]): ChatMessage[] {
+  private toMessages(history: Message[], systemPrompt?: string): ChatMessage[] {
     const out: ChatMessage[] = [{
       role: "system",
-      content: "You are a coding agent in the OQQQ group chat. Use the available tools to read/write files and run commands in your workspace. Be concise.",
+      content: systemPrompt ?? "You are a coding agent in the OQQQ group chat. Use the available tools to read/write files and run commands in your workspace. Be concise.",
     }];
     for (const m of history) {
       if (m.kind !== "text" || !("text" in m.payload)) continue;
@@ -121,8 +121,8 @@ export class OpenAIAdapter implements AgentAdapter {
     return res;
   }
 
-  async *chat(history: Message[], workspace: string): AsyncGenerator<ChatChunk> {
-    const messages = this.toMessages(history);
+  async *chat(history: Message[], workspace: string, opts?: ChatOpts): AsyncGenerator<ChatChunk> {
+    const messages = this.toMessages(history, opts?.systemPrompt);
     const maxIter = this.opts.maxIterations ?? 10;
 
     for (let iter = 0; iter < maxIter; iter++) {
