@@ -7,6 +7,7 @@ import { route } from "./router/index.js";
 import { SummaryManager } from "./summary/index.js";
 import { ArchiveManager } from "./archive/index.js";
 import { PmAgent } from "./pm/index.js";
+import { PluginMarket } from "./plugins/index.js";
 import { EchoAdapter } from "./adapters/echo.js";
 import { DshAdapter } from "./adapters/dsh.js";
 import { ClaudeCodeAdapter, CodexAdapter } from "./adapters/cli.js";
@@ -55,6 +56,7 @@ const demoPm = makePmMember();
 sessions.addMember(demo.id, demoPm, "admin");
 pmAgents.set(demo.id, new PmAgent(sessions, adapters, demoPm));
 const archive = new ArchiveManager();
+const market = new PluginMarket();
 
 /** engine registry for 联系人 -> 添加 agent */
 const engines: Engine[] = [
@@ -169,7 +171,27 @@ app.get("/api/connectors", async () => [
   { id: "pg", name: "PostgreSQL", desc: "查询业务数据库", connected: false },
 ]);
 
-/** PM workflow API (per-session) */
+/** third-party plugin marketplace (dsh-1024store) */
+app.get("/api/plugins/search", async (req) => {
+  const q = (req.query as Record<string, string>);
+  if (!q.q) return { ok: false, error: "missing q" };
+  try {
+    const r = await market.search(q.q, Number(q.page ?? 1), Number(q.limit ?? 20));
+    return { ok: true, ...r };
+  } catch (err) { return { ok: false, error: String(err).slice(0, 300) }; }
+});
+app.get("/api/plugins/permissions", async (req) => {
+  const q = (req.query as Record<string, string>);
+  if (!q.target) return { ok: false, error: "missing target" };
+  try { return { ok: true, ...(await market.permissions(q.target)) }; }
+  catch (err) { return { ok: false, error: String(err).slice(0, 300) }; }
+});
+app.post("/api/plugins/install", async (req) => {
+  const body = (req.body ?? {}) as { target?: string; confirmed?: string[] };
+  if (!body.target || !Array.isArray(body.confirmed)) return { ok: false, error: "target + confirmed[] required" };
+  try { return await market.install(body.target, body.confirmed); }
+  catch (err) { return { ok: false, error: String(err).slice(0, 500) }; }
+});
 function needPm(id: string) {
   const p = pmFor(id);
   if (!p) throw new Error("no PM in this session");

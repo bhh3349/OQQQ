@@ -1,9 +1,17 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import type { Message } from "../types.js";
 import type { AgentAdapter, ChatChunk } from "./types.js";
 
-const DSH_BIN = process.env.DSH_BIN ?? "pnpm";
+/**
+ * dsh binary resolution:
+ * - DSH_BIN: absolute path to the compiled dsh CLI (apps/cli/lib/bin.js).
+ *   Defaults to DSH_DIR/apps/cli/lib/bin.js.
+ * - Launched via `node <bin>` with cwd = session workspace, so the agent
+ *   works in the right directory. (pnpm --dir would pin cwd to DSH_DIR.)
+ */
 const DSH_DIR = process.env.DSH_DIR ?? "/home/hatch/workspace/dsh";
+const DSH_BIN = process.env.DSH_BIN ?? `${DSH_DIR}/apps/cli/lib/bin.js`;
 
 function parseEvent(line: string, onSession: (sid: string) => void): ChatChunk | null {
   if (!line) return null;
@@ -18,16 +26,17 @@ function parseEvent(line: string, onSession: (sid: string) => void): ChatChunk |
 
 /**
  * DeepSeek Harness adapter (headless CLI mode).
- * Spawns `dsh --profile headless --json` per turn, streams NDJSON events.
- * Session continuity via --session-id (managed by caller).
+ * Spawns `node <dsh-bin> --profile headless --json` per turn, streams NDJSON.
+ * Session continuity via --session-id. Autonomous: no approval gates.
  */
 export class DshAdapter implements AgentAdapter {
   readonly info = { engine: "dsh", version: "0.2.1-alpha.1", models: ["deepseek-chat"] };
   private sessionId?: string;
 
   async checkInstalled(): Promise<boolean> {
+    if (!existsSync(DSH_BIN)) return false;
     return new Promise((resolve) => {
-      const p = execFile(DSH_BIN, ["dsh", "--profile", "headless", "--help"], { cwd: DSH_DIR, timeout: 60_000 });
+      const p = execFile(process.execPath, [DSH_BIN, "--profile", "headless", "--help"], { timeout: 60_000 });
       p.on("error", () => resolve(false));
       p.on("exit", (code) => resolve(code === 0));
     });
@@ -36,11 +45,11 @@ export class DshAdapter implements AgentAdapter {
   async *chat(history: Message[], workspace: string): AsyncGenerator<ChatChunk> {
     const last = [...history].reverse().find((m) => m.kind === "text");
     const prompt = last && "text" in last.payload ? last.payload.text : "";
-    const args = ["dsh", "--profile", "headless", "--json"];
+    const args = [DSH_BIN, "--profile", "headless", "--json"];
     if (this.sessionId) args.push("--session-id", this.sessionId);
     args.push(prompt);
 
-    const child = execFile(DSH_BIN, args, {
+    const child = execFile(process.execPath, args, {
       cwd: workspace, timeout: 600_000, maxBuffer: 32 * 1024 * 1024,
       env: { ...process.env },
     });
@@ -48,6 +57,7 @@ export class DshAdapter implements AgentAdapter {
     let buf = "";
     let closed = false;
     child.stdout?.on("data", (d: Buffer) => { buf += d.toString(); });
+    child.stderr?.on("data", (d: Buffer) => { buf += d.toString(); });
     const done = new Promise<void>((resolve) => {
       child.on("close", () => { closed = true; resolve(); });
       child.on("error", () => { closed = true; resolve(); });
@@ -63,7 +73,6 @@ export class DshAdapter implements AgentAdapter {
       const chunk = parseEvent(line, (sid) => { this.sessionId = sid; });
       if (chunk) yield chunk;
     }
-    // trailing partial line
     const tail = buf.slice(cursor).trim();
     const chunk = parseEvent(tail, (sid) => { this.sessionId = sid; });
     if (chunk) yield chunk;
