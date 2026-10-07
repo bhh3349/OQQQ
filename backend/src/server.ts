@@ -5,12 +5,21 @@ import { MessageBus } from "./bus/index.js";
 import { SessionManager } from "./session/index.js";
 import { route } from "./router/index.js";
 import { EchoAdapter } from "./adapters/echo.js";
+import { DshAdapter } from "./adapters/dsh.js";
+import { ClaudeCodeAdapter, CodexAdapter } from "./adapters/cli.js";
+import { HermesAdapter } from "./adapters/hermes.js";
 import type { AgentAdapter } from "./adapters/types.js";
 import type { Member, Message } from "./types.js";
 
 const bus = new MessageBus();
 const sessions = new SessionManager();
-const adapters = new Map<string, AgentAdapter>([["echo", new EchoAdapter()]]);
+const adapters = new Map<string, AgentAdapter>([
+  ["echo", new EchoAdapter()],
+  ["dsh", new DshAdapter()],
+  ["claude-code", new ClaudeCodeAdapter()],
+  ["codex", new CodexAdapter()],
+  ["hermes", new HermesAdapter()],
+]);
 
 /** seed a demo project group: owner Bo + PM (admin) */
 const bo: Member = { id: "bo", name: "Bo", avatar: "🧑", role: "owner", kind: "user", online: true };
