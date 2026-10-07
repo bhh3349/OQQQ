@@ -1,82 +1,97 @@
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import { join } from "node:path";
 import type { Message } from "../types.js";
 import type { AgentAdapter, ChatChunk } from "./types.js";
 
-/**
- * dsh binary resolution:
- * - DSH_BIN: absolute path to the compiled dsh CLI (apps/cli/lib/bin.js).
- *   Defaults to DSH_DIR/apps/cli/lib/bin.js.
- * - Launched via `node <bin>` with cwd = session workspace, so the agent
- *   works in the right directory. (pnpm --dir would pin cwd to DSH_DIR.)
- */
 const DSH_DIR = process.env.DSH_DIR ?? "/home/hatch/workspace/dsh";
-const DSH_BIN = process.env.DSH_BIN ?? `${DSH_DIR}/apps/cli/lib/bin.js`;
+const SDK_CLIENT = join(DSH_DIR, "packages/sdk/client/lib/index.js");
 
-function parseEvent(line: string, onSession: (sid: string) => void): ChatChunk | null {
-  if (!line) return null;
-  try {
-    const ev = JSON.parse(line);
-    if (typeof ev.sessionId === "string" && ev.sessionId) onSession(ev.sessionId);
-    if (typeof ev.text === "string" && ev.text) return { delta: ev.text, done: false };
-    if (typeof ev.delta === "string" && ev.delta) return { delta: ev.delta, done: false };
-  } catch { /* non-JSON diagnostics: ignore */ }
-  return null;
+function lastText(history: Message[]): string {
+  const last = [...history].reverse().find((m) => m.kind === "text");
+  return last && "text" in last.payload ? last.payload.text : "";
 }
 
 /**
- * DeepSeek Harness adapter (headless CLI mode).
- * Spawns `node <dsh-bin> --profile headless --json` per turn, streams NDJSON.
- * Session continuity via --session-id. Autonomous: no approval gates.
+ * DeepSeek Harness adapter via the official TS SDK client (stdio JSON-RPC).
+ * One persistent `dsh --profile sdk` subprocess serves all sessions;
+ * dsh-side sessions are namespaced per OQQQ session id.
+ * Streaming is message-level (assistant/message events), not token-level.
  */
 export class DshAdapter implements AgentAdapter {
   readonly info = { engine: "dsh", version: "0.2.1-alpha.1", models: ["deepseek-chat"] };
-  private sessionId?: string;
+  private harness: any = null;
+  private starting: Promise<void> | null = null;
 
   async checkInstalled(): Promise<boolean> {
-    if (!existsSync(DSH_BIN)) return false;
-    return new Promise((resolve) => {
-      const p = execFile(process.execPath, [DSH_BIN, "--profile", "headless", "--help"], { timeout: 60_000 });
-      p.on("error", () => resolve(false));
-      p.on("exit", (code) => resolve(code === 0));
-    });
+    return existsSync(SDK_CLIENT);
+  }
+
+  private async ensureStarted(workspace: string): Promise<void> {
+    if (this.harness) return;
+    if (!this.starting) {
+      this.starting = (async () => {
+        const mod = await import(pathToFileURL(SDK_CLIENT).href);
+        this.harness = new mod.DeepSeekHarness({
+          profile: "sdk",
+          cwd: workspace,
+          provider: "deepseek-official",
+          model: process.env.DSH_MODEL ?? "deepseek-chat",
+          initializeTimeoutMs: 60_000,
+          requestTimeoutMs: 600_000,
+        });
+        await this.harness.start();
+      })();
+    }
+    await this.starting;
   }
 
   async *chat(history: Message[], workspace: string): AsyncGenerator<ChatChunk> {
-    const last = [...history].reverse().find((m) => m.kind === "text");
-    const prompt = last && "text" in last.payload ? last.payload.text : "";
-    const args = [DSH_BIN, "--profile", "headless", "--json"];
-    if (this.sessionId) args.push("--session-id", this.sessionId);
-    args.push(prompt);
+    await this.ensureStarted(workspace);
+    const oqqqSession = history[0]?.sessionId ?? "default";
+    const session = this.harness.session(`oqqq-${oqqqSession}`);
+    const prompt = lastText(history);
 
-    const child = execFile(process.execPath, args, {
-      cwd: workspace, timeout: 600_000, maxBuffer: 32 * 1024 * 1024,
-      env: { ...process.env },
+    // collect assistant text via notifications; yield each message as it lands
+    const pending: string[] = [];
+    let resolveNext: (() => void) | null = null;
+    const wake = () => { const r = resolveNext; resolveNext = null; r?.(); };
+
+    const runPromise = session.run(prompt, {
+      onNotification: (n: any) => {
+        if (n?.method === "session.event") {
+          const ev = n?.params?.event;
+          if (ev?.type === "assistant/message") {
+            const text = (ev.data?.message?.content ?? [])
+              .filter((b: any) => b?.type === "text")
+              .map((b: any) => b.text)
+              .join("");
+            if (text) { pending.push(text); wake(); }
+          }
+        }
+      },
     });
 
-    let buf = "";
-    let closed = false;
-    child.stdout?.on("data", (d: Buffer) => { buf += d.toString(); });
-    child.stderr?.on("data", (d: Buffer) => { buf += d.toString(); });
-    const done = new Promise<void>((resolve) => {
-      child.on("close", () => { closed = true; resolve(); });
-      child.on("error", () => { closed = true; resolve(); });
-    });
+    let done = false;
+    runPromise.then(() => { done = true; wake(); }, () => { done = true; wake(); });
 
-    // incrementally parse complete NDJSON lines for live deltas
-    let cursor = 0;
-    while (!closed) {
-      const nl = buf.indexOf("\n", cursor);
-      if (nl < 0) { await new Promise((r) => setTimeout(r, 60)); continue; }
-      const line = buf.slice(cursor, nl).trim();
-      cursor = nl + 1;
-      const chunk = parseEvent(line, (sid) => { this.sessionId = sid; });
-      if (chunk) yield chunk;
+    let emitted = "";
+    while (!done || pending.length > 0) {
+      while (pending.length > 0) {
+        const text = pending.shift()!;
+        // yield only the unseen suffix (events may repeat the full message)
+        if (text.startsWith(emitted)) {
+          const delta = text.slice(emitted.length);
+          if (delta) yield { delta, done: false };
+          emitted = text;
+        } else if (text !== emitted) {
+          yield { delta: text, done: false };
+          emitted = text;
+        }
+      }
+      if (!done) await new Promise<void>((r) => { resolveNext = r; });
     }
-    const tail = buf.slice(cursor).trim();
-    const chunk = parseEvent(tail, (sid) => { this.sessionId = sid; });
-    if (chunk) yield chunk;
-    await done;
+    await runPromise.catch(() => {});
     yield { delta: "", done: true };
   }
 
@@ -88,5 +103,12 @@ export class DshAdapter implements AgentAdapter {
   }
   async uninstall(): Promise<void> {
     throw new Error("dsh is managed externally");
+  }
+
+  /** shut down the persistent SDK subprocess */
+  async dispose(): Promise<void> {
+    await this.harness?.close().catch(() => {});
+    this.harness = null;
+    this.starting = null;
   }
 }
