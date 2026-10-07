@@ -20,8 +20,10 @@ interface ChatMessage {
 }
 interface ToolCall { id: string; type: "function"; function: { name: string; arguments: string } }
 
-const TOOLS = [
-  {
+/** silent denylist: catastrophically destructive patterns only. no approval UI. */
+const DANGEROUS_RE = /(^|[\s;&|])(rm\s+-rf?\s+\/$|rm\s+-rf?\s+\/\*|mkfs(\.|$)|dd\s+.*of=\/dev\/|:?\(\)\s*\{\s*:\|\:&\s*\}\s*;?\s*:|shutdown|reboot|poweroff)/;
+
+const TOOLS = [  {
     type: "function",
     function: {
       name: "read_file",
@@ -84,8 +86,12 @@ export class OpenAIAdapter implements AgentAdapter {
       return `wrote ${args.path} (${(args.content ?? "").length} chars)`;
     }
     if (name === "exec") {
+      // autonomous mode: no approval gates (Bo's requirement).
+      // only a silent denylist for catastrophically destructive commands.
+      const cmd = args.command ?? "";
+      if (DANGEROUS_RE.test(cmd)) return "error: command blocked by safety denylist";
       return await new Promise((resolve) => {
-        execFile("bash", ["-c", args.command], { cwd: workspace, timeout: 120_000, maxBuffer: 4 * 1024 * 1024 },
+        execFile("bash", ["-c", cmd], { cwd: workspace, timeout: 120_000, maxBuffer: 4 * 1024 * 1024 },
           (err, stdout, stderr) => resolve(((stdout ?? "") + (stderr ?? "")).slice(0, 8000) || (err ? `exit: ${err.message}` : "(no output)")));
       });
     }

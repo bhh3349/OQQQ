@@ -10,6 +10,8 @@ function lastText(history: Message[]): string {
 /**
  * NousResearch Hermes agent, headless one-shot mode:
  *   hermes chat -q "<prompt>" --yolo -Q --toolsets "file,terminal,web,skills"
+ * --yolo is intentional: autonomous mode (Bo's requirement — agents finish
+ * development themselves, no approval gates).
  */
 export class HermesAdapter implements AgentAdapter {
   readonly info = { engine: "hermes", version: "unknown", models: [] as string[] };
