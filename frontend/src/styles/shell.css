@@ -1,0 +1,144 @@
+/* ============================================================
+   外壳：标题栏（签名动作所在）+ 导航栏
+   ============================================================ */
+
+/* ---------- 标题栏 ---------- */
+.titlebar {
+  height: var(--h-titlebar);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) 0 var(--space-4);
+  background: var(--titlebar-grad);
+  color: var(--titlebar-text);
+  position: relative;
+  z-index: var(--z-titlebar);
+  transition: background var(--dur-base) var(--ease-out);
+}
+/* 未连接：整条降灰 —— 一眼可辨，不只靠图标颜色 */
+.titlebar[data-link="offline"],
+.titlebar[data-link="backend_down"] {
+  background: linear-gradient(180deg, #7C858F, #6B747E);
+}
+.titlebar[data-link="reconnecting"] {
+  background: linear-gradient(180deg, #C9822B, #B0721F);
+}
+.titlebar__mark {
+  font-size: var(--fs-17);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding-right: var(--space-3);
+  margin-right: var(--space-1);
+  border-right: 1px solid rgba(255, 255, 255, 0.28);
+  line-height: 1;
+}
+.titlebar__me { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.titlebar__avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  display: grid; place-items: center;
+  font-size: var(--fs-13); font-weight: 700;
+  overflow: hidden; flex-shrink: 0;
+}
+.titlebar__who { min-width: 0; }
+.titlebar__name { font-size: var(--fs-14); font-weight: 600; white-space: nowrap; }
+.titlebar__sign {
+  font-size: var(--fs-11);
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 30ch;
+}
+.titlebar__spacer { flex: 1; }
+
+/* 状态灯组：后端 / 引擎 / 模型 */
+.linkstats { display: flex; align-items: center; gap: var(--space-1); }
+.linkstat {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 9px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: var(--fs-12);
+  border: 0; cursor: default;
+  white-space: nowrap;
+}
+.linkstat--button { cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.linkstat--button:hover { background: rgba(255, 255, 255, 0.28); }
+.linkstat__dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #C8F0D2; flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+.linkstat[data-tone="ok"] .linkstat__dot { background: #7BE495; }
+.linkstat[data-tone="warn"] .linkstat__dot { background: #FFD27D; }
+.linkstat[data-tone="bad"] .linkstat__dot { background: #FF9AA0; }
+.linkstat__label { color: rgba(255, 255, 255, 0.94); }
+
+/* 窗口控制 */
+.wctl { display: flex; align-items: center; gap: 2px; margin-left: var(--space-2); }
+.wctl button {
+  width: 32px; height: 30px; border: 0; background: transparent;
+  color: rgba(255, 255, 255, 0.9); border-radius: 6px;
+  display: grid; place-items: center; cursor: pointer;
+  transition: background var(--dur-instant) var(--ease-out);
+}
+.wctl button:hover { background: rgba(255, 255, 255, 0.22); }
+.wctl button[data-role="close"]:hover { background: #E5484D; color: #fff; }
+
+/* ---------- 导航栏（7 个固定一级入口） ---------- */
+.rail {
+  width: var(--w-rail);
+  flex-shrink: 0;
+  background: var(--surface-rail);
+  border-right: 1px solid var(--border-hairline);
+  display: flex; flex-direction: column; align-items: center;
+  padding: var(--space-3) 0 var(--space-2);
+  gap: 2px;
+}
+.rail__spacer { flex: 1; }
+.rail__btn {
+  position: relative;
+  width: 46px; height: 44px;
+  border: 0; background: transparent;
+  border-radius: var(--radius-field);
+  color: var(--text-tertiary);
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+.rail__btn:hover { background: var(--gray-200); color: var(--text-secondary); }
+.rail__btn[aria-current="page"] {
+  background: var(--surface-raised);
+  color: var(--blue-500);
+  box-shadow: var(--shadow-raise-1);
+}
+.rail__badge {
+  position: absolute; top: 3px; right: 3px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 8px;
+  background: var(--badge-unread);
+  color: #fff; font-size: 10px; font-weight: 600;
+  display: grid; place-items: center;
+  border: 1.5px solid var(--surface-rail);
+  font-variant-numeric: tabular-nums;
+}
+.rail__dot {
+  position: absolute; top: 6px; right: 6px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--badge-unread);
+  border: 1.5px solid var(--surface-rail);
+}
+/* 收窄时仍保留图标栏，不折叠为汉堡菜单（文档 §04 MUST） */
+
+/* Tooltip */
+.tip {
+  position: fixed; z-index: var(--z-dropdown);
+  background: var(--gray-700); color: #fff;
+  font-size: var(--fs-12); line-height: 1.4;
+  padding: 5px 9px; border-radius: 6px;
+  pointer-events: none; white-space: nowrap;
+  box-shadow: var(--shadow-raise-2);
+  animation: tip-in var(--dur-fast) var(--ease-out);
+}
+@keyframes tip-in { from { opacity: 0; transform: translateX(-3px); } }

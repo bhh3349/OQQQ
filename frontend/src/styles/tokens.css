@@ -1,0 +1,181 @@
+/* ============================================================
+   OQQQ — Design Tokens
+   三层脊：primitive → semantic → component
+   只有 semantic 层随主题切换。
+   实测取色来源：refs/qq-chat.png（vision_dominant_colors）
+   ============================================================ */
+
+:root {
+  /* ---------- primitive: 蓝色阶 ----------
+     #0099FF 取自 QQ 发送按钮实测（79.8% 占比）
+     #1C7DF2 取自设计文档 §14 主色 —— 归入同一色阶作深一级，
+     避免两个并列强调色造成视觉死结 */
+  --blue-25:  #F0F8FF;
+  --blue-50:  #CCEBFF; /* 自己的消息气泡底色（实测） */
+  --blue-100: #A8DBFF;
+  --blue-300: #59B6F5; /* 标题栏渐变亮端（实测） */
+  --blue-400: #2DA2F0; /* 标题栏主蓝（实测 50%） */
+  --blue-500: #0099FF; /* 主行动色 */
+  --blue-600: #1C7DF2; /* 文档主色，作 pressed / 语义强调 */
+  --blue-700: #0B7DD0;
+  --blue-800: #0A5E9E;
+
+  /* ---------- primitive: 中性阶 ---------- */
+  --gray-0:   #FFFFFF;
+  --gray-25:  #FAFBFC;
+  --gray-50:  #F5F6F5; /* 导航栏底（实测 72.8%） */
+  --gray-100: #F5F5F5; /* 会话列底（实测 24.8%） */
+  --gray-150: #ECECEC; /* 搜索框底（实测 57.2%） */
+  --gray-200: #E4E6E8;
+  --gray-300: #DADADA; /* 会话选中态（实测 57%） */
+  --gray-400: #C5C5C6;
+  --gray-500: #898A8B; /* 次级文字（实测） */
+  --gray-600: #6B7076;
+  --gray-700: #3A3F45;
+  --gray-900: #14213D; /* 文档正文色 */
+
+  /* ---------- primitive: 语义色（只表状态，不做装饰） ---------- */
+  --green-500: #17A53A;
+  --green-100: #E4F6EA;
+  --amber-500: #E39B12;
+  --amber-100: #FDF3E2;
+  --red-500:   #E5484D;
+  --red-100:   #FDEBEC;
+
+  /* ---------- primitive: 间距（文档 §14：4px 基线） ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ---------- primitive: 圆角（文档 §14：8 / 12 / 16，按角色分配） ---------- */
+  --radius-field: 8px;   /* 输入框、按钮、小元素 */
+  --radius-card: 12px;   /* 卡片、气泡、会话项 */
+  --radius-overlay: 16px;/* 弹窗、抽屉 */
+
+  /* ---------- primitive: 字体 ---------- */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+             "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+             "Noto Sans CJK SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono",
+               Menlo, Consolas, "Noto Sans Mono CJK SC", monospace;
+
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-15: 15px;
+  --fs-17: 17px;
+  --fs-20: 20px;
+  --fs-24: 24px;
+
+  --lh-tight: 1.25;
+  --lh-snug: 1.5;
+  --lh-loose: 1.65;
+
+  /* ---------- primitive: 动效（IM 高频交互，预算极小） ---------- */
+  --dur-instant: 80ms;
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in:  cubic-bezier(0.55, 0.06, 0.68, 0.19);
+
+  /* ---------- primitive: 布局尺寸（文档：基准 1440×900，最小 1024） ---------- */
+  --h-titlebar: 56px;
+  --w-rail: 62px;
+  --w-list: 260px;
+  --w-list-min: 200px;
+  --w-inspector: 300px;
+
+  /* ---------- primitive: 阴影（分层：环境光 + 直射光） ---------- */
+  --shadow-raise-1: 0 1px 2px rgba(20, 33, 61, 0.06);
+  --shadow-raise-2: 0 1px 3px rgba(20, 33, 61, 0.07),
+                    0 4px 12px rgba(20, 33, 61, 0.06);
+  --shadow-overlay: 0 2px 6px rgba(20, 33, 61, 0.08),
+                    0 12px 32px rgba(20, 33, 61, 0.14),
+                    0 28px 64px rgba(20, 33, 61, 0.10);
+  --shadow-inset-line: inset 0 0 0 1px rgba(20, 33, 61, 0.06);
+
+  /* ============================================================
+     semantic — 组件只引用这一层
+     ============================================================ */
+  --text-primary:   var(--gray-900);
+  --text-secondary: var(--gray-600);
+  --text-tertiary:  var(--gray-500);
+  --text-disabled:  var(--gray-400);
+  --text-inverse:   var(--gray-0);
+  --text-link:      var(--blue-600);
+
+  --surface-canvas:   var(--gray-0);   /* 聊天主区：纯白（实测） */
+  --surface-rail:     var(--gray-50);
+  --surface-list:     var(--gray-100);
+  --surface-raised:   var(--gray-0);
+  --surface-sunken:   var(--gray-150);
+  --surface-hover:    var(--gray-300);  /* 实测 hover/选中同一族 */
+  --surface-selected: var(--gray-300);
+  --surface-accent:   var(--blue-500);
+  --surface-accent-hover: var(--blue-700);
+  --surface-bubble-self: var(--blue-50);
+
+  --border-hairline: var(--gray-200);
+  --border-strong:   var(--gray-400);
+  --border-focus:    var(--blue-500);
+
+  --titlebar-grad: linear-gradient(180deg, var(--blue-400), var(--blue-500));
+  --titlebar-text: var(--gray-0);
+
+  --state-online:  var(--green-500);
+  --state-busy:    var(--amber-500);
+  --state-error:   var(--red-500);
+  --state-offline: var(--gray-400);
+  --badge-unread:  var(--red-500);
+
+  /* 焦点环：可访问性地板 */
+  --ring-focus: 0 0 0 2px var(--gray-0), 0 0 0 4px var(--blue-300);
+
+  /* z-index 阶梯 */
+  --z-content: 1;
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-drawer: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+  --z-titlebar: 500;
+}
+
+/* ---------- 暗色：真设计，不是反转 ----------
+   画布近 gray-950 带蓝调；强调色降饱和防刺眼；
+   深色下阴影失效，改 1px 描边环；最亮文字不用纯白 */
+[data-theme="dark"] {
+  --blue-500: #3D9BE0; /* 降色度，防 OLED 刺眼 */
+  --blue-600: #4FA8E8;
+  --blue-50:  #1E3A52;
+  --blue-100: #17304A;
+
+  --gray-0:   #1A1D22;
+  --gray-25:  #1E2126;
+  --gray-50:  #21252B;
+  --gray-100: #24282E;
+  --gray-150: #2A2F36;
+  --gray-200: #343A42;
+  --gray-300: #3E454E;
+  --gray-400: #5A626C;
+  --gray-500: #8A939E;
+  --gray-600: #A9B2BC;
+  --gray-700: #C6CDD5;
+  --gray-900: #E4E8ED; /* 非纯白，防光晕 */
+
+  --surface-canvas: #1A1D22;
+  --titlebar-grad: linear-gradient(180deg, #1F6FA8, #1A5E91);
+
+  --shadow-raise-1: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-raise-2: inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+                    0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+                    0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-inset-line: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
