@@ -8,6 +8,7 @@ import { EchoAdapter } from "./adapters/echo.js";
 import { DshAdapter } from "./adapters/dsh.js";
 import { ClaudeCodeAdapter, CodexAdapter } from "./adapters/cli.js";
 import { HermesAdapter } from "./adapters/hermes.js";
+import { OpenAIAdapter } from "./adapters/openai.js";
 import type { AgentAdapter } from "./adapters/types.js";
 import type { Member, Message } from "./types.js";
 
@@ -20,6 +21,14 @@ const adapters = new Map<string, AgentAdapter>([
   ["codex", new CodexAdapter()],
   ["hermes", new HermesAdapter()],
 ]);
+// OpenAI-compatible supplier (Bo's usual): configured via env
+if (process.env.OQQQ_API_KEY) {
+  adapters.set("openai", new OpenAIAdapter({
+    baseURL: process.env.OQQQ_BASE_URL ?? "https://api.deepseek.com",
+    apiKey: process.env.OQQQ_API_KEY,
+    model: process.env.OQQQ_MODEL ?? "deepseek-chat",
+  }));
+}
 
 /** seed a demo project group: owner Bo + PM (admin) */
 const bo: Member = { id: "bo", name: "Bo", avatar: "🧑", role: "owner", kind: "user", online: true };
