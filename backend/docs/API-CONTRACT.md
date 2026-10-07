@@ -90,12 +90,16 @@ interface Member {
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/engines` | 引擎列表 |
-| POST | `/api/engines/:id/install` | 安装引擎 → `{ok:true}` 或 `{ok:false, error}` |
+| GET | `/api/engines` | 引擎列表（**实时探测**：跑 `<command> --version`，非 hardcode） |
+| POST | `/api/engines/:id/install` | 真安装（`npm install -g`）；原生引擎返回 `{ok:false, code:"MANUAL_INSTALL", error:"官网链接"}` → 前端展示"去官网安装" |
+| POST | `/api/engines/:id/update` | 更新到最新版 → 返回刷新后的引擎列表 |
+| POST | `/api/engines/:id/uninstall` | 卸载 → 返回刷新后的引擎列表 |
 
 ```ts
 interface Engine { id: string; name: string; avatar: string; version: string; status: "installed" | "not_installed" }
 ```
+
+支持的引擎（`src/engines/registry.ts`）：hermes、claude-code（`@anthropic-ai/claude-code`）、codex（`@openai/codex`）、opencode（`opencode-ai`）、grok（`@xai-official/grok`）、dsh、openai（API，无需安装）、echo（内置）。
 
 ### 技能 / 连接器
 

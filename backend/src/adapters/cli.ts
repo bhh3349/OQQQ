@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import type { Message } from "../types.js";
 import type { AgentAdapter, ChatChunk } from "./types.js";
+import { getEngineDef, npmInstall, npmUninstall, npmUpdate, probeVersion } from "../engines/registry.js";
 
 function lastText(history: Message[]): string {
   const last = [...history].reverse().find((m) => m.kind === "text");
@@ -18,38 +19,58 @@ async function run(cmd: string, args: string[], cwd: string, timeoutMs: number):
   });
 }
 
-/** Anthropic Claude Code: `claude -p --output-format text` one-shot */
-export class ClaudeCodeAdapter implements AgentAdapter {
-  readonly info = { engine: "claude-code", version: "unknown", models: ["claude"] };
+/**
+ * Generic CLI engine adapter driven by the engine registry.
+ * chatArgs: per-engine one-shot invocation (prompt appended last).
+ */
+export class CliAdapter implements AgentAdapter {
+  readonly info = { engine: "", version: "unknown", models: [] as string[] };
+
+  constructor(
+    private engineId: string,
+    private chatArgs: string[],
+    models: string[] = [],
+  ) {
+    this.info.engine = engineId;
+    this.info.models = models;
+  }
+
+  private def() {
+    const d = getEngineDef(this.engineId);
+    if (!d) throw new Error(`unknown engine ${this.engineId}`);
+    return d;
+  }
+
   async checkInstalled(): Promise<boolean> {
-    const r = await run("claude", ["--version"], process.cwd(), 15_000);
-    if (r.code === 0) { this.info.version = r.out.trim().split("\n")[0] ?? "unknown"; return true; }
+    const v = await probeVersion(this.def().command);
+    if (v) { this.info.version = v; return true; }
     return false;
   }
+
   async *chat(history: Message[], workspace: string): AsyncGenerator<ChatChunk> {
-    const r = await run("claude", ["-p", "--output-format", "text", lastText(history)], workspace, 600_000);
+    const r = await run(this.def().command, [...this.chatArgs, lastText(history)], workspace, 600_000);
     if (r.out) yield { delta: r.out, done: false };
     yield { delta: "", done: true };
   }
-  async install(): Promise<void> { throw new Error("install claude code via npm i -g @anthropic-ai/claude-code"); }
-  async update(): Promise<void> { await run("npm", ["update", "-g", "@anthropic-ai/claude-code"], process.cwd(), 300_000); }
-  async uninstall(): Promise<void> { await run("npm", ["uninstall", "-g", "@anthropic-ai/claude-code"], process.cwd(), 300_000); }
+
+  async install(): Promise<void> { await npmInstall(this.def()); }
+  async update(): Promise<void> { await npmUpdate(this.def()); }
+  async uninstall(): Promise<void> { await npmUninstall(this.def()); }
 }
 
-/** OpenAI Codex: `codex exec` one-shot */
-export class CodexAdapter implements AgentAdapter {
-  readonly info = { engine: "codex", version: "unknown", models: ["gpt"] };
-  async checkInstalled(): Promise<boolean> {
-    const r = await run("codex", ["--version"], process.cwd(), 15_000);
-    if (r.code === 0) { this.info.version = r.out.trim().split("\n")[0] ?? "unknown"; return true; }
-    return false;
-  }
-  async *chat(history: Message[], workspace: string): AsyncGenerator<ChatChunk> {
-    const r = await run("codex", ["exec", "--skip-git-repo-check", lastText(history)], workspace, 600_000);
-    if (r.out) yield { delta: r.out, done: false };
-    yield { delta: "", done: true };
-  }
-  async install(): Promise<void> { throw new Error("install codex via npm i -g @openai/codex"); }
-  async update(): Promise<void> { await run("npm", ["update", "-g", "@openai/codex"], process.cwd(), 300_000); }
-  async uninstall(): Promise<void> { await run("npm", ["uninstall", "-g", "@openai/codex"], process.cwd(), 300_000); }
+/** Anthropic Claude Code: `claude -p --output-format text` */
+export class ClaudeCodeAdapter extends CliAdapter {
+  constructor() { super("claude-code", ["-p", "--output-format", "text"], ["claude"]); }
+}
+/** OpenAI Codex: `codex exec` */
+export class CodexAdapter extends CliAdapter {
+  constructor() { super("codex", ["exec", "--skip-git-repo-check"], ["gpt"]); }
+}
+/** OpenCode: `opencode run` */
+export class OpenCodeAdapter extends CliAdapter {
+  constructor() { super("opencode", ["run"], ["opencode"]); }
+}
+/** xAI Grok Code: `grok` one-shot */
+export class GrokAdapter extends CliAdapter {
+  constructor() { super("grok", [], ["grok"]); }
 }

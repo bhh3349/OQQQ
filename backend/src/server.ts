@@ -10,7 +10,8 @@ import { PmAgent } from "./pm/index.js";
 import { PluginMarket } from "./plugins/index.js";
 import { EchoAdapter } from "./adapters/echo.js";
 import { DshAdapter } from "./adapters/dsh.js";
-import { ClaudeCodeAdapter, CodexAdapter } from "./adapters/cli.js";
+import { ClaudeCodeAdapter, CodexAdapter, OpenCodeAdapter, GrokAdapter } from "./adapters/cli.js";
+import { ENGINE_DEFINITIONS, getEngineDef } from "./engines/registry.js";
 import { HermesAdapter } from "./adapters/hermes.js";
 import { OpenAIAdapter, toolPayload } from "./adapters/openai.js";
 import type { AgentAdapter } from "./adapters/types.js";
@@ -24,6 +25,8 @@ const adapters = new Map<string, AgentAdapter>([
   ["dsh", new DshAdapter()],
   ["claude-code", new ClaudeCodeAdapter()],
   ["codex", new CodexAdapter()],
+  ["opencode", new OpenCodeAdapter()],
+  ["grok", new GrokAdapter()],
   ["hermes", new HermesAdapter()],
 ]);
 if (process.env.OQQQ_API_KEY) {
@@ -58,14 +61,21 @@ pmAgents.set(demo.id, new PmAgent(sessions, adapters, demoPm));
 const archive = new ArchiveManager();
 const market = new PluginMarket();
 
-/** engine registry for 联系人 -> 添加 agent */
-const engines: Engine[] = [
-  { id: "hermes", name: "Hermes", avatar: "🟣", version: "v0.21.5", status: "installed" },
-  { id: "claude-code", name: "Claude Code", avatar: "🟠", version: "v2.1.289", status: "installed" },
-  { id: "codex", name: "Codex", avatar: "🔵", version: "v0.160.0", status: "not_installed" },
-  { id: "dsh", name: "DeepSeek Harness", avatar: "🐋", version: "v0.2.1-alpha.1", status: "installed" },
-  { id: "openai", name: "OpenAI 兼容", avatar: "⚙️", version: "v1.0.0", status: process.env.OQQQ_API_KEY ? "installed" : "not_installed" },
-];
+/** engine registry for 联系人 -> 添加 agent (driven by ENGINE_DEFINITIONS) */
+async function engineList(): Promise<Engine[]> {
+  return Promise.all(ENGINE_DEFINITIONS.map(async (d) => {
+    const a = adapters.get(d.id);
+    const installed = a ? await a.checkInstalled().catch(() => false) : false;
+    return {
+      id: d.id, name: d.name, avatar: d.avatar,
+      version: a?.info.version && a.info.version !== "unknown" ? `v${a.info.version}` : "",
+      status: d.id === "openai"
+        ? (process.env.OQQQ_API_KEY ? "installed" : "not_installed")
+        : d.id === "echo" ? "installed"
+        : installed ? "installed" : "not_installed",
+    } as Engine;
+  }));
+}
 
 const app = Fastify({ logger: false });
 await app.register(websocket);
@@ -149,14 +159,31 @@ app.post("/api/sessions", async (req) => {
   }
   return { ok: true, session: s };
 });
-app.get("/api/engines", async () => engines);
+app.get("/api/engines", async () => engineList());
 app.post("/api/engines/:id/install", async (req) => {
   const { id } = req.params as Record<string, string>;
-  const e = engines.find((x) => x.id === id);
+  const def = getEngineDef(id);
   const a = adapters.get(id);
-  if (!e || !a) return { ok: false, error: "unknown engine" };
-  try { await a.install(); e.status = "installed"; return { ok: true }; }
-  catch (err) { return { ok: false, error: String(err).slice(0, 200) }; }
+  if (!def || !a) return { ok: false, error: "unknown engine" };
+  try { await a.install(); return { ok: true, engines: await engineList() }; }
+  catch (err: any) {
+    if (err?.code === "MANUAL_INSTALL") return { ok: false, code: "MANUAL_INSTALL", error: String(err.message).slice(0, 300) };
+    return { ok: false, error: String(err?.message ?? err).slice(0, 300) };
+  }
+});
+app.post("/api/engines/:id/update", async (req) => {
+  const { id } = req.params as Record<string, string>;
+  const a = adapters.get(id);
+  if (!a) return { ok: false, error: "unknown engine" };
+  try { await a.update(); return { ok: true, engines: await engineList() }; }
+  catch (err: any) { return { ok: false, error: String(err?.message ?? err).slice(0, 300) }; }
+});
+app.post("/api/engines/:id/uninstall", async (req) => {
+  const { id } = req.params as Record<string, string>;
+  const a = adapters.get(id);
+  if (!a) return { ok: false, error: "unknown engine" };
+  try { await a.uninstall(); return { ok: true, engines: await engineList() }; }
+  catch (err: any) { return { ok: false, error: String(err?.message ?? err).slice(0, 300) }; }
 });
 app.get("/api/skills", async () => [
   { id: "deep-research", name: "深度研究", desc: "多轮搜索 + 来源引用", installed: true },

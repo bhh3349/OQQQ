@@ -45,7 +45,12 @@ export class HermesAdapter implements AgentAdapter {
     yield { delta: "", done: true };
   }
 
-  async install(): Promise<void> { throw new Error("install hermes via the official installer: https://hermes-agent.nousresearch.com"); }
+  async install(): Promise<void> {
+    throw Object.assign(
+      new Error("install hermes via the official installer: https://github.com/NousResearch/Hermes"),
+      { code: "MANUAL_INSTALL" },
+    );
+  }
   async update(): Promise<void> {
     await new Promise<void>((resolve) => {
       const p = execFile("hermes", ["upgrade"], { timeout: 300_000 });
