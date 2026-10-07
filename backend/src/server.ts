@@ -36,13 +36,24 @@ if (process.env.OQQQ_API_KEY) {
 /** seed a demo project group: owner Bo + PM (admin) */
 const bo: Member = { id: "bo", name: "Bo", avatar: "🧑", role: "owner", kind: "user", online: true };
 const pmEngine = process.env.OQQQ_API_KEY ? "openai" : "echo";
-const pm: Member = {
-  id: "pm", name: "PM", avatar: "📋", role: "admin", kind: "agent",
-  engine: pmEngine, online: true, systemPrompt: PmAgent.interviewPrompt(),
-};
+
+function makePmMember(): Member {
+  return {
+    id: "pm", name: "PM", avatar: "📋", role: "admin", kind: "agent",
+    engine: pmEngine, online: true, systemPrompt: PmAgent.interviewPrompt(),
+  };
+}
+
+/** one PmAgent per group session */
+const pmAgents = new Map<string, PmAgent>();
+function pmFor(sessionId: string): PmAgent | undefined {
+  return pmAgents.get(sessionId);
+}
+
 const demo = sessions.create({ kind: "group", name: "OQQQ 开发群", workspace: "/tmp/oqqq-demo", owner: bo });
-sessions.addMember(demo.id, pm, "admin");
-const pmAgent = new PmAgent(sessions, adapters, pm);
+const demoPm = makePmMember();
+sessions.addMember(demo.id, demoPm, "admin");
+pmAgents.set(demo.id, new PmAgent(sessions, adapters, demoPm));
 const archive = new ArchiveManager();
 
 /** engine registry for 联系人 -> 添加 agent */
@@ -119,6 +130,23 @@ app.get("/api/sessions/:id/messages", async (req) => {
   const { id } = req.params as Record<string, string>;
   return bus.recent(id, 100);
 });
+/** create a group (with PM) or dm session */
+app.post("/api/sessions", async (req) => {
+  const body = (req.body ?? {}) as { kind?: "group" | "dm"; name?: string; peerId?: string };
+  const kind = body.kind === "dm" ? "dm" : "group";
+  const s = sessions.create({
+    kind,
+    name: body.name ?? (kind === "dm" ? "新的聊天" : "新的项目群"),
+    workspace: `/tmp/oqqq-${randomUUID().slice(0, 8)}`,
+    owner: bo,
+  });
+  if (kind === "group") {
+    const pm = makePmMember();
+    sessions.addMember(s.id, pm, "admin");
+    pmAgents.set(s.id, new PmAgent(sessions, adapters, pm));
+  }
+  return { ok: true, session: s };
+});
 app.get("/api/engines", async () => engines);
 app.post("/api/engines/:id/install", async (req) => {
   const { id } = req.params as Record<string, string>;
@@ -141,15 +169,28 @@ app.get("/api/connectors", async () => [
   { id: "pg", name: "PostgreSQL", desc: "查询业务数据库", connected: false },
 ]);
 
-/** PM workflow API */
-app.get("/api/sessions/:id/pm", async () => ({ phase: pmAgent.phase, spec: pmAgent.getSpec() }));
-app.post("/api/sessions/:id/pm/confirm", async () => { pmAgent.confirmSpec(); return { ok: true, phase: pmAgent.phase }; });
+/** PM workflow API (per-session) */
+function needPm(id: string) {
+  const p = pmFor(id);
+  if (!p) throw new Error("no PM in this session");
+  return p;
+}
+app.get("/api/sessions/:id/pm", async (req) => {
+  const { id } = req.params as Record<string, string>;
+  try { const p = needPm(id); return { phase: p.phase, spec: p.getSpec() }; }
+  catch (err) { return { ok: false, error: String(err).slice(0, 200) }; }
+});
+app.post("/api/sessions/:id/pm/confirm", async (req) => {
+  const { id } = req.params as Record<string, string>;
+  try { const p = needPm(id); p.confirmSpec(); return { ok: true, phase: p.phase }; }
+  catch (err) { return { ok: false, error: String(err).slice(0, 200) }; }
+});
 app.post("/api/sessions/:id/pm/propose-team", async (req) => {
   const { id } = req.params as Record<string, string>;
   const s = sessions.get(id);
   if (!s) return { ok: false, error: "no session" };
   try {
-    const spec = await pmAgent.proposeTeam(bus.recent(id, 40), s.workspace);
+    const spec = await needPm(id).proposeTeam(bus.recent(id, 40), s.workspace);
     return { ok: true, spec };
   } catch (err) { return { ok: false, error: String(err).slice(0, 300) }; }
 });
@@ -158,8 +199,9 @@ app.post("/api/sessions/:id/pm/form-team", async (req) => {
   const s = sessions.get(id);
   if (!s) return { ok: false, error: "no session" };
   try {
-    const created = pmAgent.formTeam(s, pmAgent.getSpec());
-    const spec = pmAgent.getSpec();
+    const p = needPm(id);
+    const created = p.formTeam(s, p.getSpec());
+    const spec = p.getSpec();
     created.forEach((m, i) => { m.systemPrompt = spec[i]?.systemPrompt; });
     return { ok: true, members: created.map((m) => m.id) };
   } catch (err) { return { ok: false, error: String(err).slice(0, 300) }; }

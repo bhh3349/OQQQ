@@ -16,11 +16,15 @@ export class SummaryManager {
   get every(): number { return this.threshold; }
   setThreshold(n: number) { this.threshold = n; }
 
-  /** call for every effective message; returns true when a summary is due */
+  /** call for every effective message; returns true when a summary is due (auto-resets) */
   count(sessionId: string): boolean {
     const n = (this.counters.get(sessionId) ?? 0) + 1;
+    if (n >= this.threshold) {
+      this.counters.set(sessionId, 0);
+      return true;
+    }
     this.counters.set(sessionId, n);
-    return n >= this.threshold;
+    return false;
   }
 
   reset(sessionId: string) { this.counters.set(sessionId, 0); }
