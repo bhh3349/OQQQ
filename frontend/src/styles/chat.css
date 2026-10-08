@@ -511,3 +511,7 @@
 .pm-action { display: flex; flex-direction: column; gap: var(--space-3); }
 .pm-action h4 { font-size: var(--fs-13); font-weight: 600; margin: 0; }
 .pm-team { display: flex; flex-direction: column; gap: 2px; }
+.pm-doc { border: 1px solid var(--border-hairline); border-radius: var(--radius-md); overflow: hidden; }
+.pm-doc__head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--gray-100); border-bottom: 1px solid var(--border-hairline); }
+.pm-doc__title { font-size: var(--fs-13); font-weight: 600; }
+.pm-doc__body { margin: 0; padding: 12px; font-size: var(--fs-12); line-height: 1.7; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; color: var(--text-primary); }

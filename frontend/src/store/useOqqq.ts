@@ -47,6 +47,8 @@ export function useClient() {
     installPlugin: (t: string, confirmed: string[]) => client.installPlugin(t, confirmed),
     updateAnnouncement: (cid: string, text: string) => client.updateAnnouncement(cid, text),
     pmConfirm: (cid: string) => client.pmConfirm(cid),
+    pmGenerateSpecDoc: (cid: string) => client.pmGenerateSpecDoc(cid),
+    specDocOf: (cid: string) => client.specDocOf(cid),
     pmProposeTeam: (cid: string) => client.pmProposeTeam(cid),
     pmFormTeam: (cid: string, spec: Parameters<typeof client.pmFormTeam>[1]) => client.pmFormTeam(cid, spec),
     phaseOf: (cid: string) => client.phaseOf(cid),

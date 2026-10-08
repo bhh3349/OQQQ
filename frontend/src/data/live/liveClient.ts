@@ -84,6 +84,7 @@ export class LiveClient extends OqqqClient {
   private membersBySession: Record<string, WireMember[]> = {};
   private streaming: Record<string, Message> = {};
   private pmPhase: Record<string, ProjectPhase> = {};
+  private pmSpecDoc: Record<string, string> = {};
 
   constructor() {
     super();
@@ -136,6 +137,7 @@ export class LiveClient extends OqqqClient {
         try {
           const pm = await (await fetch(`${BASE}/api/sessions/${s.id}/pm`)).json();
           if (pm.phase) this.pmPhase[s.id] = pm.phase;
+          if (pm.specDoc) this.pmSpecDoc[s.id] = pm.specDoc;
         } catch { /* no PM */ }
       }
       this.setConn('online');
@@ -418,6 +420,16 @@ export class LiveClient extends OqqqClient {
 
   /* ---------- PM 流程 ---------- */
   phaseOf(cid: string): ProjectPhase { return this.pmPhase[cid] ?? 'interview'; }
+
+  specDocOf(cid: string): string | null { return this.pmSpecDoc[cid] ?? null; }
+
+  async pmGenerateSpecDoc(cid: string): Promise<string> {
+    const r = await (await fetch(`${BASE}/api/sessions/${cid}/pm/spec-doc`, { method: 'POST' })).json();
+    if (!r.ok) throw new Error(r.error ?? '生成需求文档失败');
+    this.pmSpecDoc[cid] = r.specDoc;
+    this.commit();
+    return r.specDoc;
+  }
 
   async pmConfirm(cid: string): Promise<void> {
     const r = await (await fetch(`${BASE}/api/sessions/${cid}/pm/confirm`, { method: 'POST' })).json();

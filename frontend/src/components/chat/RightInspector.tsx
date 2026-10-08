@@ -288,6 +288,7 @@ function ProjectPane({ conversation }: { conversation: Conversation }) {
   const teamSpec = conv.project?.teamSpec;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [specDoc, setSpecDoc] = useState<string | null>(() => client.specDocOf(conv.id));
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key); setError(null);
@@ -314,15 +315,37 @@ function ProjectPane({ conversation }: { conversation: Conversation }) {
       {error && <p className="field__error">{error}</p>}
 
       {/* 各阶段操作 */}
-      {phase === 'interview' && (
+      {phase === 'interview' && !specDoc && (
         <div className="pm-action">
           <p className="empty__hint" style={{ textAlign: 'left' }}>
-            PM 正在群里访谈需求。访谈完成后，在此确认需求文档，进入组队。
+            PM 正在群里访谈需求。访谈完成后，让 PM 基于访谈记录生成需求文档。
           </p>
+          <button className="btn btn--primary" disabled={!!busy}
+            onClick={() => run('specdoc', () => client.pmGenerateSpecDoc(conv.id).then(setSpecDoc))}>
+            {busy === 'specdoc' ? '生成中…' : '生成需求文档'}
+          </button>
+        </div>
+      )}
+
+      {phase === 'interview' && specDoc && (
+        <div className="pm-action">
+          <div className="pm-doc">
+            <div className="pm-doc__head">
+              <span className="pm-doc__title">需求文档</span>
+              <button className="btn btn--ghost btn--sm" disabled={!!busy}
+                onClick={() => run('specdoc', () => client.pmGenerateSpecDoc(conv.id).then(setSpecDoc))}>
+                {busy === 'specdoc' ? '生成中…' : '重新生成'}
+              </button>
+            </div>
+            <pre className="pm-doc__body">{specDoc}</pre>
+          </div>
           <button className="btn btn--primary" disabled={!!busy}
             onClick={() => run('confirm', () => client.pmConfirm(conv.id))}>
             {busy === 'confirm' ? '确认中…' : '确认需求文档'}
           </button>
+          <p className="empty__hint" style={{ textAlign: 'left', marginTop: 8 }}>
+            确认后进入团队组建，PM 将根据需求生成团队方案。
+          </p>
         </div>
       )}
 
