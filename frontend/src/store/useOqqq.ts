@@ -49,6 +49,7 @@ export function useClient() {
     pmConfirm: (cid: string) => client.pmConfirm(cid),
     pmProposeTeam: (cid: string) => client.pmProposeTeam(cid),
     pmFormTeam: (cid: string, spec: Parameters<typeof client.pmFormTeam>[1]) => client.pmFormTeam(cid, spec),
+    phaseOf: (cid: string) => client.phaseOf(cid),
     requestSummary: (cid: string) => client.requestSummary(cid),
     archiveProject: (cid: string, copy: boolean) => client.archiveProject(cid, copy),
     restoreArchive: (path: string) => client.restoreArchive(path),

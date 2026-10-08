@@ -166,7 +166,7 @@ function EngineCatalog() {
           <div className="member" key={e.id}>
             <span className="msg-file__ic" style={{ width: 30, height: 30 }}><Icon name="engine" size={15} /></span>
             <span style={{ minWidth: 0, flex: 1 }}>
-              <span className="member__name">{e.name} <span className="mono" style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>v{e.version}</span></span>
+              <span className="member__name">{e.name}{e.version && <span className="mono" style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}> v{e.version}</span>}</span>
               <span className="member__sub">{e.features.join(' · ') || '本地引擎'}</span>
             </span>
             <span className="member__role">
@@ -207,7 +207,7 @@ function AgentDetail({
         <Avatar ref={contact.avatar} size={56} />
         <div>
           <h3>{contact.displayName}</h3>
-          <p className="contacts__sub mono">{engine.name} · v{engine.version}</p>
+          <p className="contacts__sub mono">{engine.name}{engine.version && ` · v${engine.version}`}</p>
         </div>
         <span className="spacer" />
         <Pill tone={st.status === 'installed' ? 'ok' : st.status === 'installing' ? 'info' : st.status === 'failed' ? 'bad' : 'muted'}>

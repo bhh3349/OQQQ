@@ -125,7 +125,7 @@
   --border-strong:   var(--gray-400);
   --border-focus:    var(--blue-500);
 
-  --titlebar-grad: linear-gradient(180deg, var(--blue-400), var(--blue-500));
+  --titlebar-grad: linear-gradient(180deg, #2B8FD9, #147BC5);
   --titlebar-text: var(--gray-0);
 
   --state-online:  var(--green-500);

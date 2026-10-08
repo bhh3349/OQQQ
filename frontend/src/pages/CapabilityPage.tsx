@@ -72,7 +72,7 @@ function CapabilityCard({
     <article className={cardClass} aria-label={`${cap.name} ${meta.label}`}>
       <div className="cap-card__head">
         <h3 className="cap-card__name">{cap.name}</h3>
-        <span className="cap-card__ver mono tnum">v{cap.version}</span>
+        {cap.version && <span className="cap-card__ver mono tnum">v{cap.version}</span>}
         <span className="cap-card__state"><Pill tone={meta.tone}>{meta.label}</Pill></span>
       </div>
 

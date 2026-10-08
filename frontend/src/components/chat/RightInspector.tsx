@@ -3,12 +3,12 @@
    单聊时由 Agent 资料抽屉替代（见 InspectorFor 分支）。
    ============================================================ */
 import { useEffect, useMemo, useState } from 'react';
-import type { AgentContact, Conversation } from '../../types/model';
+import type { AgentContact, Conversation, ProjectPhase, TeamSpecEntry } from '../../types/model';
 import { Icon } from '../icons/Icons';
 import { Avatar, Pill } from '../ui/Primitives';
 import { useClient, useSnapshot } from '../../store/useOqqq';
 
-export type InspectorTab = 'announce' | 'members' | 'files';
+export type InspectorTab = 'announce' | 'members' | 'files' | 'project';
 
 export function RightInspector({
   conversation, tab, onTab, onJumpMessage,
@@ -21,7 +21,7 @@ export function RightInspector({
     <aside className="inspector" aria-label="群信息">
       <div className="inspector__tabs" role="tablist">
         {([
-          ['announce', '群公告'], ['members', `群成员`], ['files', '群文件'],
+          ['announce', '群公告'], ['members', `群成员`], ['files', '群文件'], ['project', '项目'],
         ] as [InspectorTab, string][]).map(([id, label]) => (
           <button
             key={id} role="tab" className="inspector__tab"
@@ -33,6 +33,7 @@ export function RightInspector({
         {tab === 'announce' && <AnnouncePane conversation={conversation} />}
         {tab === 'members' && <MembersPane conversation={conversation} />}
         {tab === 'files' && <FilesPane conversation={conversation} onJumpMessage={onJumpMessage} />}
+        {tab === 'project' && <ProjectPane conversation={conversation} />}
       </div>
     </aside>
   );
@@ -264,5 +265,137 @@ export function AgentDrawer({ conversation }: { conversation: Conversation }) {
         <p className="field__hint">会话重置将清空本单聊上下文，历史消息保留在本地。</p>
       </div>
     </aside>
+  );
+}
+
+const PHASES: { id: ProjectPhase; label: string }[] = [
+  { id: 'interview', label: '需求访谈' },
+  { id: 'spec_ready', label: '需求确认' },
+  { id: 'team_formed', label: '团队组建' },
+  { id: 'working', label: '开发中' },
+  { id: 'done', label: '已完结' },
+];
+
+const PHASE_INDEX: Record<ProjectPhase, number> = {
+  interview: 0, spec_ready: 1, team_formed: 2, working: 3, done: 4, archived: 5,
+};
+
+function ProjectPane({ conversation }: { conversation: Conversation }) {
+  const client = useClient();
+  const s = useSnapshot();
+  const conv = s.conversations.find((c) => c.id === conversation.id) ?? conversation;
+  const phase = client.phaseOf(conv.id);
+  const teamSpec = conv.project?.teamSpec;
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (key: string, fn: () => Promise<void>) => {
+    setBusy(key); setError(null);
+    try { await fn(); } catch (e) { setError(String(e).slice(0, 200)); }
+    finally { setBusy(null); }
+  };
+
+  const phaseIdx = PHASE_INDEX[phase] ?? 0;
+  const isArchived = phase === 'archived';
+
+  return (
+    <div className="inspector__sec">
+      {/* 阶段步骤条 */}
+      <div className="pm-steps" aria-label="项目阶段">
+        {PHASES.map((p, i) => (
+          <div key={p.id} className={`pm-step${i < phaseIdx ? ' pm-step--done' : ''}${i === phaseIdx ? ' pm-step--cur' : ''}`}>
+            <span className="pm-step__dot">{i < phaseIdx ? '✓' : i + 1}</span>
+            <span className="pm-step__label">{p.label}</span>
+            {i < PHASES.length - 1 && <span className="pm-step__line" />}
+          </div>
+        ))}
+      </div>
+
+      {error && <p className="field__error">{error}</p>}
+
+      {/* 各阶段操作 */}
+      {phase === 'interview' && (
+        <div className="pm-action">
+          <p className="empty__hint" style={{ textAlign: 'left' }}>
+            PM 正在群里访谈需求。访谈完成后，在此确认需求文档，进入组队。
+          </p>
+          <button className="btn btn--primary" disabled={!!busy}
+            onClick={() => run('confirm', () => client.pmConfirm(conv.id))}>
+            {busy === 'confirm' ? '确认中…' : '确认需求文档'}
+          </button>
+        </div>
+      )}
+
+      {phase === 'spec_ready' && !teamSpec && (
+        <div className="pm-action">
+          <p className="empty__hint" style={{ textAlign: 'left' }}>
+            需求已确认。让 PM 根据需求生成团队方案。
+          </p>
+          <button className="btn btn--primary" disabled={!!busy}
+            onClick={() => run('propose', () => client.pmProposeTeam(conv.id).then(() => {}))}>
+            {busy === 'propose' ? '生成中…' : '生成团队方案'}
+          </button>
+        </div>
+      )}
+
+      {teamSpec && phase === 'spec_ready' && (
+        <div className="pm-action">
+          <h4>团队方案（待确认）</h4>
+          <div className="pm-team">
+            {teamSpec.map((m: TeamSpecEntry, i: number) => (
+              <div className="member" key={i}>
+                <Avatar ref={m.avatar} size={28} />
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <span className="member__name">{m.name}</span>
+                  <span className="member__sub">{m.role} · {m.engineId}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button className="btn btn--primary" disabled={!!busy}
+              onClick={() => run('form', () => client.pmFormTeam(conv.id, teamSpec))}>
+              {busy === 'form' ? '组队中…' : '确认组队'}
+            </button>
+            <button className="btn" disabled={!!busy}
+              onClick={() => run('propose', () => client.pmProposeTeam(conv.id).then(() => {}))}>
+              重新生成
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(phase === 'team_formed' || phase === 'working') && (
+        <div className="pm-action">
+          <p className="empty__hint" style={{ textAlign: 'left' }}>
+            {phase === 'team_formed' ? '团队已组建，等待开工。' : '项目进行中，Agent 们正在自主开发。'}
+          </p>
+          {teamSpec && teamSpec.length > 0 && (
+            <>
+              <h4>团队成员</h4>
+              <div className="pm-team">
+                {teamSpec.map((m: TeamSpecEntry, i: number) => (
+                  <div className="member" key={i}>
+                    <Avatar ref={m.avatar} size={28} />
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <span className="member__name">{m.name}</span>
+                      <span className="member__sub">{m.role}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {(phase === 'done' || isArchived) && (
+        <div className="pm-action">
+          <p className="empty__hint" style={{ textAlign: 'left' }}>
+            {isArchived ? '项目已归档。' : '项目已完结，可在消息页归档导出。'}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

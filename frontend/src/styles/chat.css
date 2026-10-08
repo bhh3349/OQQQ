@@ -491,3 +491,23 @@
 .agentdetail__head .spacer { flex: 1; }
 .agentdetail__head h3 { font-size: var(--fs-17); font-weight: 600; }
 .agentdetail__actions { display: flex; gap: var(--space-2); }
+
+/* ---------- PM 项目流程 ---------- */
+.pm-steps { display: flex; align-items: flex-start; margin-bottom: var(--space-4); }
+.pm-step { display: flex; align-items: center; flex: 1; min-width: 0; }
+.pm-step:last-child { flex: 0; }
+.pm-step__dot {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center;
+  font-size: var(--fs-11); font-weight: 600;
+  background: var(--gray-200); color: var(--text-tertiary);
+}
+.pm-step--done .pm-step__dot { background: var(--green-500); color: #fff; }
+.pm-step--cur .pm-step__dot { background: var(--blue-500); color: #fff; box-shadow: 0 0 0 3px var(--blue-100); }
+.pm-step__label { font-size: var(--fs-11); color: var(--text-tertiary); margin-left: 6px; white-space: nowrap; }
+.pm-step--cur .pm-step__label { color: var(--text-primary); font-weight: 600; }
+.pm-step__line { flex: 1; height: 1px; background: var(--border-hairline); margin: 0 6px; min-width: 8px; }
+.pm-step--done .pm-step__line { background: var(--green-500); }
+.pm-action { display: flex; flex-direction: column; gap: var(--space-3); }
+.pm-action h4 { font-size: var(--fs-13); font-weight: 600; margin: 0; }
+.pm-team { display: flex; flex-direction: column; gap: 2px; }
